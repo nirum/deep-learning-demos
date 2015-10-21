@@ -5,16 +5,75 @@ Toy fully-connected multi-layered neural networks
 
 import numpy as np
 from descent import Adam
+from toolz import compose
 
 
 class Network:
 
-    def __init__(self, dim):
+    def __init__(self, x, y, layers):
 
-        self.layers = []
+        self.x = x
+        self.y = y
+        self.layers = layers
 
-        for ix in range(len(dims) - 1):
-            self.layers.append(Layer(dims[ix:(ix+2)]))
+        # initial parameters
+        self.theta_init = [{'weights': layer.weights, 'bias': layer.bias}
+                           for layer in layers]
+
+    def loss(self, yhat):
+        """
+        Loss function
+
+        """
+
+        # squared error
+        # err = yhat - self.y
+        # obj = 0.5 * np.mean(err ** 2)
+
+        # cross-entropy
+        obj = np.mean(-self.y * np.log(yhat) - (1-self.y) * np.log(1-yhat))
+        err = (yhat - self.y) / (yhat * (1-yhat))
+
+        return obj, err
+
+    def predict(self, theta, x=None):
+
+        # update parameters in each layer
+        for layer, theta in zip(self.layers, theta):
+            layer.update(theta['weights'], theta['bias'])
+
+        if x is None:
+            x = self.x
+
+        return compose(*reversed(self.layers))(x)
+
+    def __call__(self, theta):
+        """
+        Objective and gradient
+
+        """
+
+        # update parameters in each layer
+        for layer, theta in zip(self.layers, theta):
+            layer.update(theta['weights'], theta['bias'])
+
+        # compute prediction from forward pass
+        yhat = compose(*reversed(self.layers))(self.x)
+
+        # evaluate the prediction on the loss function
+        obj, error = self.loss(yhat)
+
+        # backward pass
+        gradient = []
+        for layer in reversed(self.layers):
+
+            # backpropogate the error
+            dW, db, error = layer.backprop(error)
+
+            # append to the gradient
+            gradient.append({'weights': dW, 'bias': db})
+
+        return obj, list(reversed(gradient))
 
 
 class Layer:
@@ -56,13 +115,13 @@ class Layer:
         tmp = error * self.dy
         dW = np.tensordot(tmp, self.x, ([1], [1])) / nsamples
         db = np.sum(tmp, axis=1).reshape(-1,1) / nsamples
-        delta = self.weights.T @ error
+        delta = self.weights.T @ tmp
 
         return dW, db, delta
 
     def update(self, weights, bias):
-        self.weights = weights
-        self.bias = bias
+        self.weights = weights.copy()
+        self.bias = bias.copy()
 
 
 if __name__ == '__main__':
