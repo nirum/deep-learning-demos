@@ -4,8 +4,10 @@ Toy fully-connected multi-layered neural networks
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from descent import Adam
 from toolz import compose
+from jetpack.chart import breathe, noticks
 
 
 class Network:
@@ -126,20 +128,32 @@ class Layer:
 
 if __name__ == '__main__':
 
-    # L1 = layer((1,2))
-
     # generate data (in a box)
     X = np.random.rand(2, 1000)*2 - 1
-    y = np.ones(X.shape[1]) * (np.linalg.norm(X, axis=0) > 0.75)
+    y = np.ones(X.shape[1]) * (np.linalg.norm(X, np.inf, axis=0) > 0.75)
 
-    # def net_obj(W):
-        # L1.W = W
-        # yhat = L1(X)
-        # err = y - yhat
-        # obj = 0.5 * np.mean(err ** 2)
-        # grad = L1.backprop(err)
-        # return obj, grad
+    # build network
+    L1 = Layer((5,2))
+    L2 = Layer((1,5))
+    net = Network(X, y, [L1, L2])
 
     # optimize
-    # opt = Adam(net_obj, np.random.randn(*L1.shape), learning_rate=0.01)
-    # opt.run()
+    opt = Adam(net, net.theta_init, learning_rate=1e-3)
+    opt.display.every = 100
+
+    # contour
+    V = [0., 0.25, 0.5, 0.75, 1.]
+    xm, ym = np.meshgrid(np.linspace(-1,1,200), np.linspace(-1,1,200))
+    Xm = np.stack([xm.ravel(), ym.ravel()])
+
+    def callback(d, every=100):
+        if d.iteration % every == 0:
+            ygrid = net.predict(d.params, Xm)
+            plt.contourf(xm, ym, ygrid.reshape(200,200), V, cmap='RdBu')
+            plt.gca().set_aspect('equal')
+            noticks()
+            plt.savefig('figures/iter{:05d}.png'.format(d.iteration), bbox_inches='tight', dpi=150)
+            plt.close()
+
+    # append callback
+    opt.callbacks.append(callback)
