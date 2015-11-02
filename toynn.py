@@ -91,6 +91,9 @@ class Layer:
         self.bias = np.random.randn(dims[0],1) * bias_scaling
 
     def __call__(self, x):
+        """
+        Forward pass
+        """
 
         # store input
         self.x = x
@@ -112,6 +115,9 @@ class Layer:
         return self.weights.shape
 
     def backprop(self, error):
+        """
+        Backward pass
+        """
 
         nsamples = float(error.shape[1])
         tmp = error * self.dy
