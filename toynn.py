@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from descent import Adam
 from toolz import compose
 from jetpack.chart import breathe, noticks
+from utils import generate_data
 
 
 class Network:
@@ -135,8 +136,7 @@ class Layer:
 if __name__ == '__main__':
 
     # generate data (in a box)
-    X = np.random.rand(2, 1000)*2 - 1
-    y = np.ones(X.shape[1]) * (np.linalg.norm(X, np.inf, axis=0) > 0.75)
+    X, y = generate_data(norm=np.inf)
 
     # build network
     L1 = Layer((5,2))
