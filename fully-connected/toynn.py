@@ -5,7 +5,8 @@ Toy fully-connected multi-layered neural networks
 
 import numpy as np
 import matplotlib.pyplot as plt
-from descent import Adam
+from descent import GradientDescent
+from descent.algorithms import adam
 from toolz import compose
 from jetpack.chart import breathe, noticks
 from utils import generate_data
@@ -18,10 +19,6 @@ class Network:
         self.x = x
         self.y = y
         self.layers = layers
-
-        # initial parameters
-        self.theta_init = [{'weights': layer.weights, 'bias': layer.bias}
-                           for layer in layers]
 
     def loss(self, yhat):
         """
@@ -39,26 +36,18 @@ class Network:
 
         return obj, err
 
-    def predict(self, theta, x=None):
-
-        # update parameters in each layer
-        for layer, theta in zip(self.layers, theta):
-            layer.update(theta['weights'], theta['bias'])
+    def predict(self, x=None):
 
         if x is None:
             x = self.x
 
         return compose(*reversed(self.layers))(x)
 
-    def __call__(self, theta):
+    def __call__(self):
         """
         Objective and gradient
 
         """
-
-        # update parameters in each layer
-        for layer, theta in zip(self.layers, theta):
-            layer.update(theta['weights'], theta['bias'])
 
         # compute prediction from forward pass
         yhat = compose(*reversed(self.layers))(self.x)
@@ -67,29 +56,29 @@ class Network:
         obj, error = self.loss(yhat)
 
         # backward pass
-        gradient = []
         for layer in reversed(self.layers):
 
             # backpropogate the error
-            dW, db, error = layer.backprop(error)
+            error = layer.backprop(error)
 
-            # append to the gradient
-            gradient.append({'weights': dW, 'bias': db})
-
-        return obj, list(reversed(gradient))
+        return obj
 
 
 class Layer:
     def __init__(self, dims, learning_rate=1e-3):
 
-        self.nin = dims[1]
-        self.nout = dims[0]
-
+        # initialize parameters
         weight_scaling = 0.1 / np.sqrt(np.prod(dims))
         bias_scaling = 0.1 / np.sqrt(dims[0])
-
         self.weights =  np.random.randn(*dims) * weight_scaling
         self.bias = np.random.randn(dims[0],1) * bias_scaling
+
+        # initialize learning algorithm
+        self.weights_opt = adam(lr=learning_rate)
+        self.weights_opt.send(self.weights)
+
+        self.bias_opt = adam(lr=learning_rate)
+        self.bias_opt.send(self.bias)
 
     def __call__(self, x):
         """
@@ -102,12 +91,15 @@ class Layer:
         # affine term
         self.z = self.weights @ x + self.bias
 
-        # nonlinearity and gradient
+        # apply activation nonlinearity and store derivative
         self.y, self.dy = self.activation(self.z)
 
         return self.y
 
     def activation(self, u):
+        """
+        Sigmoidal nonlinearity
+        """
         g = 1 / (1 + np.exp(-u))
         return g, g*(1-g)
 
@@ -121,16 +113,21 @@ class Layer:
         """
 
         nsamples = float(error.shape[1])
-        tmp = error * self.dy
-        dW = np.tensordot(tmp, self.x, ([1], [1])) / nsamples
-        db = np.sum(tmp, axis=1).reshape(-1,1) / nsamples
-        delta = self.weights.T @ tmp
+        delta = error * self.dy
 
-        return dW, db, delta
+        # parameter updates
+        dW = np.tensordot(delta, self.x, ([1], [1])) / nsamples
+        db = np.sum(delta, axis=1).reshape(-1, 1) / nsamples
+        self.update(dW, db)
 
-    def update(self, weights, bias):
-        self.weights = weights.copy()
-        self.bias = bias.copy()
+        # pass back the new error
+        errornext = self.weights.T @ delta
+
+        return errornext
+
+    def update(self, dW, db):
+        self.weights = self.weights_opt.send(dW)
+        self.bias = self.bias_opt.send(db)
 
 
 if __name__ == '__main__':
@@ -144,22 +141,21 @@ if __name__ == '__main__':
     net = Network(X, y, [L1, L2])
 
     # optimize
-    opt = Adam(net, net.theta_init, learning_rate=1e-3)
-    opt.display.every = 100
+    # opt = GradientDescent(net.theta_init, net, adam(lr=1e-2))
 
     # contour
-    V = [0., 0.25, 0.5, 0.75, 1.]
-    xm, ym = np.meshgrid(np.linspace(-1,1,200), np.linspace(-1,1,200))
-    Xm = np.stack([xm.ravel(), ym.ravel()])
+    # V = [0., 0.25, 0.5, 0.75, 1.]
+    # xm, ym = np.meshgrid(np.linspace(-1,1,200), np.linspace(-1,1,200))
+    # Xm = np.stack([xm.ravel(), ym.ravel()])
 
-    def callback(d, every=100):
-        if d.iteration % every == 0:
-            ygrid = net.predict(d.params, Xm)
-            plt.contourf(xm, ym, ygrid.reshape(200,200), V, cmap='RdBu')
-            plt.gca().set_aspect('equal')
-            noticks()
-            plt.savefig('figures/iter{:05d}.png'.format(d.iteration), bbox_inches='tight', dpi=150)
-            plt.close()
+    # def callback(d, every=100):
+        # if d.iteration % every == 0:
+            # ygrid = net.predict(d.params, Xm)
+            # plt.contourf(xm, ym, ygrid.reshape(200,200), V, cmap='RdBu')
+            # plt.gca().set_aspect('equal')
+            # noticks()
+            # plt.savefig('figures/iter{:05d}.png'.format(d.iteration), bbox_inches='tight', dpi=150)
+            # plt.close()
 
-    # append callback
-    opt.callbacks.append(callback)
+    # # append callback
+    # opt.callbacks.append(callback)
