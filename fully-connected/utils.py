@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def generate_data(norm=np.inf, nsamples=1000):
 
     # generate data (in a box)
@@ -9,4 +10,9 @@ def generate_data(norm=np.inf, nsamples=1000):
     return X, y
 
 
-
+def sigmoid(u):
+    """
+    Sigmoidal nonlinearity
+    """
+    g = 1 / (1 + np.exp(-u))
+    return g, g*(1-g)
