@@ -25,15 +25,19 @@ def build_fullyconnected(norm=np.inf, nhidden=5):
 
 if __name__ == '__main__':
 
-    # build the network
-    net = build_fullyconnected()
+    # norm ball for generate toy data
+    norm = np.inf
 
-    # train
-    numiter = 10000
+    # build the network
+    net = build_fullyconnected(norm=norm)
+
+    # train (should take ~10s)
+    numiter = 20000
     objective = np.array([net() for _ in trange(numiter)])
 
-    # predicted class labels
-    yhat = net.predict()[0]
+    # predicted class labels (on held out data)
+    X_holdout, y_holdout = generate_data(norm=norm, nsamples=5000)
+    yhat = net.predict(X_holdout)[0]
 
     # plot the training curve
     plt.figure()
@@ -43,5 +47,10 @@ if __name__ == '__main__':
 
     # plot labeled training data
     plt.figure()
-    plt.plot(net.x[0][yhat > 0.5], net.x[1][yhat > 0.5], 'ro')
-    plt.plot(net.x[0][yhat <= 0.5], net.x[1][yhat <= 0.5], 'bo')
+    plt.scatter(X_holdout[0], X_holdout[1], s=50, c=yhat, cmap='seismic')
+    plt.gca().set_aspect('equal')
+    plt.xlim(-1, 1)
+    plt.ylim(-1, 1)
+
+    plt.show()
+    plt.draw()
