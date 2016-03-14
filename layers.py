@@ -3,22 +3,20 @@ from descent.algorithms import adam
 from toolz import compose
 from utils import sigmoid
 
-__all__ = ['Network', 'Layer', 'RecurrentLayer']
+__all__ = ['Network', 'Layer']
 
 
 class Network:
 
     def __init__(self, x, y, layers):
+        """Builds a fully connected multilayer neural network"""
 
         self.x = x
         self.y = y
         self.layers = layers
 
     def loss(self, yhat):
-        """
-        Loss function
-
-        """
+        """Loss function"""
 
         # squared error
         # err = yhat - self.y
@@ -31,6 +29,7 @@ class Network:
         return obj, err
 
     def predict(self, x=None):
+        """Forward pass"""
 
         if x is None:
             x = self.x
@@ -38,10 +37,7 @@ class Network:
         return compose(*reversed(self.layers))(x)
 
     def __call__(self):
-        """
-        Objective and gradient
-
-        """
+        """Backward pass, computes error and runs backprop"""
 
         # compute prediction from forward pass
         yhat = compose(*reversed(self.layers))(self.x)
@@ -60,6 +56,7 @@ class Network:
 
 class Layer:
     def __init__(self, dims, learning_rate=1e-3, activation=sigmoid):
+        """A single fully connected layer"""
 
         # initialize parameters
         weight_scaling = 0.1 / np.sqrt(np.prod(dims))
@@ -70,19 +67,15 @@ class Layer:
         # initialize nonlinearity
         self.activation = activation
 
-        # initialize learning algorithm
-        self.weights_opt = adam(lr=learning_rate)
-        self.weights_opt.send(self.weights)
+        # initialize optimizer for each parameter
+        self.weights_opt = adam(self.weights, lr=learning_rate)
+        self.bias_opt = adam(self.bias, lr=learning_rate)
 
-        self.bias_opt = adam(lr=learning_rate)
-        self.bias_opt.send(self.bias)
-
+        # if true, then learning is turned on, and the weights are updated
         self.active = True
 
     def __call__(self, x):
-        """
-        Forward pass
-        """
+        """Forward pass"""
 
         # store input
         self.x = x
@@ -100,128 +93,20 @@ class Layer:
         return self.weights.shape
 
     def backprop(self, error):
-        """
-        Backward pass
-        """
+        """Backward pass"""
 
         nsamples = float(error.shape[1])
         delta = error * self.dy
 
         # parameter updates
-        if active:
+        if self.active:
             dW = np.tensordot(delta, self.x, ([1], [1])) / nsamples
             db = np.sum(delta, axis=1).reshape(-1, 1) / nsamples
             self.update(dW, db)
 
         # pass back the new error
-        errornext = self.weights.T @ delta
-
-        return errornext
+        return self.weights.T @ delta
 
     def update(self, dW, db):
-        self.weights = self.weights_opt.send(dW)
-        self.bias = self.bias_opt.send(db)
-
-
-class RecurrentLayer:
-
-    def __init__(self, seq_length, dims, learning_rate=1e-3, activation=sigmoid):
-
-        # sequence length
-        self.T = seq_length
-
-        # input weights
-        self.W =  np.random.randn(*dims) * 0.1 / np.sqrt(np.prod(dims))
-
-        # recurrent weights
-        self.U =  np.random.randn(dims[0], dims[0]) * 0.1 / float(dims[0])
-
-        # bias
-        self.b = np.random.randn(dims[0],) * 0.1 / np.sqrt(dims[0])
-
-        # nonlinearity
-        self.activation = activation
-
-        # initialize learning algorithm
-        self.W_opt = adam(lr=learning_rate)
-        self.W_opt.send(self.W)
-
-        self.U_opt = adam(lr=learning_rate)
-        self.U_opt.send(self.U)
-
-        self.b_opt = adam(lr=learning_rate)
-        self.b_opt.send(self.b)
-
-        self.active = True
-
-    def __call__(self, xs):
-        """
-        Forward pass
-        """
-
-        # store input
-        self.xs = xs
-
-        # store affine term at each step in the sequence
-        self.z = []
-        self.y = []
-        self.dy = []
-
-        # feed in the sequence
-        for t, x in enumerate(xs):
-
-            if t == 0:
-                z = self.W @ x + self.b
-
-            else:
-                z = self.W @ x + self.U @ self.y[t-1] + self.b
-
-            y, dy = self.activation(z)
-
-            self.z.append(z)
-            self.y.append(y)
-            self.dy.append(dy)
-
-        # return final output
-        return self.y[-1]
-
-    def backprop(self, error):
-        """
-        Backward pass
-        """
-
-        dW = np.zeros_like(self.W)
-        dU = np.zeros_like(self.U)
-        db = np.zeros_like(self.b)
-
-        for t in reversed(range(self.T)):
-
-            delta = error * self.dy[t]
-            db += delta
-            dW += np.outer(delta, self.xs[t])
-            if t > 0:
-                dU += np.outer(delta, self.y[t-1])
-
-            error = self.U.T @ delta
-
-        # normalize
-        dW /= float(self.T)
-        dU /= float(self.T-1)
-        db /= float(self.T)
-
-        # update the parameters
-        if self.active:
-            self.update(dW, dU, db)
-
-            # pass back the new error
-            return self.W.T @ delta
-
-        else:
-
-            return dW, dU, db
-
-    def update(self, dW, dU, db):
-        self.W = self.W_opt.send(dW)
-        self.U = self.U_opt.send(dU)
-        self.b = self.b_opt.send(db)
-
+        self.weights = self.weights_opt(dW)
+        self.bias = self.bias_opt(db)
