@@ -4,6 +4,7 @@ demos of neural networks, in python
 #### setup
 ```bash
 $ git clone https://github.com/nirum/deep-learning-demos
+$ cd deep-learning-demos
 $ pip install -r requirements.txt
 ```
 
