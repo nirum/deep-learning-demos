@@ -108,7 +108,7 @@ def main():
     batch_size = 1000
     sequence_length = 50
     sample_length = 100
-    nsamples = 1000
+    nsamples = 100
 
     sess = None
     X, rev_lu = data.main()
@@ -118,7 +118,7 @@ def main():
     loss_history = []
     for epoch in range(nepochs):
         sess, losses = train(niter, xs, ys, X, fobj, train_op, sess=sess)
-        samples = sample(sess, sample_length, xseed, rev_lu, temp=0.01)
+        samples = sample(sess, sample_length, xseed, rev_lu, temp=1.)
         txt = '\n--------------------\n'.join(samples)
         loss_history.append(losses)
         with open(f'epoch{epoch}.txt', 'w') as f:
