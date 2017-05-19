@@ -12,10 +12,11 @@ class Model:
         self.n_hidden = n_hidden
         self.n_out = n_out
         self.sess = None
+        self.fobj = None
         self.loss_history = []
 
     def inference(self, xs):
-        return lstm(xs, self.n_hidden, n_out=self.n_out)
+        return lstm(xs, self.n_hidden, nout=self.n_out, scope="char_rnn")
 
     def loss(self, xs, ys):
         yhat = self.inference(xs)
@@ -29,19 +30,19 @@ class Model:
         state_a = tf.placeholder(tf.float32, shape=(bz, self.n_hidden))
         state_b = tf.placeholder(tf.float32, shape=(bz, self.n_hidden))
         state_ph = (state_a, state_b)
-        state = (np.zeros((bz, n_units)), np.zeros((bz, n_units)))
+        state = (np.zeros((bz, self.n_hidden)), np.zeros((bz, self.n_hidden)))
 
         with tf.variable_scope("lstm"):
 
             # logits tensor
             with tf.variable_scope("rnn"):
-                rnn = tf.contrib.rnn.BasicLSTMCell(n_units, reuse=True)
+                rnn = tf.contrib.rnn.BasicLSTMCell(self.n_hidden, reuse=True)
                 y, new_state = rnn(x_ph, state_ph)
             output = affine(y, nin, scope="output_proj", reuse=True)
 
         # seed the state
         for idx in range(slen):
-            feed = {state_a: state[0], state_b: state[1], x_ph: X[:, idx, :]}
+            feed = {state_a: state[0], state_b: state[1], x_ph: xseed[:, idx, :]}
             logits, state = self.sess.run([output, new_state], feed_dict=feed)
 
         # sample
@@ -61,11 +62,11 @@ class Model:
 
     def train(self, n_iter, datagen, sequence_length, batch_size):
 
-        xs = tf.placeholder(tf.float32, shape=(batch_size, sequence_length, self.n_out))
-        ys = tf.placeholder(tf.float32, shape=(batch_size, sequence_length, self.n_out))
-
-        fobj = self.loss(xs, ys)
-        train_op = tf.train.AdamOptimizer(2e-3).minimize(fobj)
+        if self.fobj is None:
+            self.xs = tf.placeholder(tf.float32, shape=(batch_size, sequence_length, self.n_out))
+            self.ys = tf.placeholder(tf.float32, shape=(batch_size, sequence_length, self.n_out))
+            self.fobj = self.loss(self.xs, self.ys)
+            self.train_op = tf.train.AdamOptimizer(2e-3).minimize(self.fobj)
 
         if self.sess is None:
             self.sess = tf.Session()
@@ -76,31 +77,14 @@ class Model:
         print(tp.header(['iter', 'loss', 'runtime'], width=width), flush=True)
         for k in range(n_iter):
             # Xtra, ytra = data.datagen(X, batch_size, seq_length)
-            Xtra, ytra = datagen(batch_size, sequence_length)
+            Xtra, ytra = datagen(batch_size=batch_size, sequence_length=sequence_length)
             tstart = time.perf_counter()
-            fk, _ = self.sess.run([fobj, train_op], feed_dict={xs: Xtra, ys: ytra})
+            fk, _ = self.sess.run([self.fobj, self.train_op], feed_dict={self.xs: Xtra, self.ys: ytra})
             tstop = time.perf_counter() - tstart
             losses[k] = fk
             print(tp.row([k, fk, tp.humantime(tstop)], width=width), flush=True)
         print(tp.bottom(3, width=width))
         self.loss_history.append(losses)
-
-
-def build(batch_size, sequence_length):
-    N = 36
-
-    xs = tf.placeholder(tf.float32, shape=(batch_size, sequence_length, N))
-    ys = tf.placeholder(tf.float32, shape=(batch_size, sequence_length, N))
-
-    n_hidden = 512
-    yhat = lstm(xs, n_hidden, nout=N)
-
-    loss = tf.nn.softmax_cross_entropy_with_logits(labels=ys, logits=yhat)
-    fobj = tf.reduce_mean(loss)
-
-    train_op = tf.train.AdamOptimizer(2e-3).minimize(fobj)
-
-    return xs, ys, yhat, fobj, train_op
 
 
 def softmax(logits):
@@ -125,17 +109,17 @@ def main():
     niter = 100
     batch_size = 1000
     sequence_length = 50
-    sample_length = 100
-    nsamples = 100
+    sample_length = 1000
+    nsamples = 10
 
     X, rev_lu = data.main()
-    datagen = partial(data.datagen, X=X)
-    xseed = datagen(nsamples, sequence_length)
+    datagen = partial(data.datagen, X)
+    xseed, _ = datagen(batch_size=nsamples, sequence_length=sequence_length)
 
     char_rnn = Model()
 
     for epoch in range(nepochs):
-        print(tp.banner(f'Epoch #{epoch+1} of {nepochs}'))
+        tp.banner(f'Epoch #{epoch+1} of {nepochs}')
         char_rnn.train(niter, datagen, sequence_length, batch_size)
         samples = char_rnn.sample(xseed, sample_length, rev_lu.__getitem__)
         txt = '\n--------------------\n'.join(samples)
@@ -146,4 +130,4 @@ def main():
 
 
 if __name__ == '__main__':
-    loss_history = main()
+    char_rnn = main()
