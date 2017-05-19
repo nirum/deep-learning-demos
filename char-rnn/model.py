@@ -6,10 +6,7 @@ from yadll import lstm, affine
 import data
 
 
-def build():
-
-    batch_size = 1000
-    sequence_length = 10
+def build(batch_size, sequence_length):
     N = 36
 
     xs = tf.placeholder(tf.float32, shape=(batch_size, sequence_length, N))
@@ -28,6 +25,8 @@ def build():
 
 def train(niter, xs, ys, X, fobj, train_op, sess=None):
 
+    batch_size, seq_length, _ = xs.shape.as_list()
+
     if sess is None:
         sess = tf.Session()
         sess.run(tf.global_variables_initializer())
@@ -36,7 +35,7 @@ def train(niter, xs, ys, X, fobj, train_op, sess=None):
     width = (9, 11, 15)
     print(tp.header(['iter', 'loss', 'runtime'], width=width), flush=True)
     for k in range(niter):
-        Xtra, ytra = data.datagen(X, 1000, 10)
+        Xtra, ytra = data.datagen(X, batch_size, seq_length)
         tstart = time.perf_counter()
         fk, _ = sess.run([fobj, train_op], feed_dict={xs: Xtra, ys: ytra})
         tstop = time.perf_counter() - tstart
@@ -55,8 +54,12 @@ def softmax(logits):
 
 
 def draw_sample(prob):
-    prob -= 1e-8
-    return np.array([np.argmax(np.random.multinomial(1, p)) for p in prob])
+    samples = []
+    for p in prob:
+        p /= p.sum()
+        p -= 1e-6
+        samples.append(np.argmax(np.random.multinomial(1, p)))
+    return np.array(samples)
 
 
 def sample(sess, nsamples, X, rev_lu, temp=1.):
@@ -100,14 +103,22 @@ def sample(sess, nsamples, X, rev_lu, temp=1.):
 
 
 def main():
+    nepochs = 1000
+    niter = 100
+    batch_size = 1000
+    sequence_length = 50
+    sample_length = 100
+    nsamples = 1000
+
     sess = None
     X, rev_lu = data.main()
-    xs, ys, yhat, fobj, train_op = build()
+    xs, ys, yhat, fobj, train_op = build(batch_size, sequence_length)
+    xseed, _ = data.datagen(X, nsamples, sequence_length)
 
     loss_history = []
-    for epoch in range(100):
-        sess, losses = train(1000, xs, ys, X, fobj, train_op, sess=sess)
-        samples = sample(sess, 100, X, rev_lu)
+    for epoch in range(nepochs):
+        sess, losses = train(niter, xs, ys, X, fobj, train_op, sess=sess)
+        samples = sample(sess, sample_length, xseed, rev_lu, temp=0.01)
         txt = '\n--------------------\n'.join(samples)
         loss_history.append(losses)
         with open(f'epoch{epoch}.txt', 'w') as f:

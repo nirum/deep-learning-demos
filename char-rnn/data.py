@@ -18,7 +18,7 @@ def sanitize(string):
 
 
 def datagen(X, batch_size, sequence_length):
-    start_inds = np.random.randint(X.shape[1] - sequence_length, size=batch_size)
+    start_inds = np.random.randint(X.shape[0] - sequence_length, size=batch_size)
     xs = [X[i:(i + sequence_length), :] for i in start_inds]
     ys = [X[(i + 1):(i + 1 + sequence_length), :] for i in start_inds]
     return np.stack(xs), np.stack(ys)
