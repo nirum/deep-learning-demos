@@ -16,7 +16,7 @@ class Model:
         self.loss_history = []
 
     def inference(self, xs):
-        return lstm(xs, self.n_hidden, nout=self.n_out, scope="char_rnn")
+        return lstm(xs, self.n_hidden, nout=self.n_out)
 
     def loss(self, xs, ys):
         yhat = self.inference(xs)
